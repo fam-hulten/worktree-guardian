@@ -89,6 +89,9 @@
             border-radius: 20px;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
         }
         
         .filter-btn:hover, .filter-btn.active {
@@ -97,9 +100,26 @@
             border-color: #00d4ff;
         }
         
+        .filter-btn.clean.active { background: #22c55e; border-color: #22c55e; }
         .filter-btn.dirty.active { background: #ffaa00; border-color: #ffaa00; }
         .filter-btn.outdated.active { background: #ff4444; border-color: #ff4444; }
         .filter-btn.abandoned.active { background: #888; border-color: #888; }
+
+        .count-badge {
+            background: #0f1629;
+            color: #cbd5e1;
+            border-radius: 999px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            min-width: 24px;
+            text-align: center;
+        }
+
+        .filter-btn.active .count-badge {
+            background: rgba(15, 22, 41, 0.85);
+            color: #e2e8f0;
+        }
         
         table {
             width: 100%;
@@ -127,6 +147,15 @@
         tr:hover {
             background: #1f2b47;
         }
+
+        .worktree-row td:first-child {
+            border-left: 4px solid transparent;
+        }
+
+        .worktree-row.row-clean td:first-child { border-left-color: #22c55e; }
+        .worktree-row.row-dirty td:first-child { border-left-color: #eab308; }
+        .worktree-row.row-outdated td:first-child { border-left-color: #ef4444; }
+        .worktree-row.row-abandoned td:first-child { border-left-color: #f97316; }
         
         .status {
             display: inline-block;
@@ -160,6 +189,10 @@
             color: #888;
             font-size: 13px;
         }
+
+        .days.age-fresh { color: #22c55e; font-weight: 600; }
+        .days.age-stale { color: #eab308; font-weight: 600; }
+        .days.age-old { color: #ef4444; font-weight: 600; }
         
         .commit {
             font-family: monospace;
@@ -223,10 +256,11 @@
         </div>
         
         <div class="filters">
-            <button class="filter-btn active" data-filter="all">All</button>
-            <button class="filter-btn dirty" data-filter="dirty">Dirty</button>
-            <button class="filter-btn outdated" data-filter="outdated">Outdated</button>
-            <button class="filter-btn abandoned" data-filter="abandoned">Abandoned</button>
+            <button class="filter-btn active" data-filter="all">All <span class="count-badge" id="count-all">0</span></button>
+            <button class="filter-btn clean" data-filter="clean">Clean <span class="count-badge" id="count-clean">0</span></button>
+            <button class="filter-btn dirty" data-filter="dirty">Dirty <span class="count-badge" id="count-dirty">0</span></button>
+            <button class="filter-btn outdated" data-filter="outdated">Outdated <span class="count-badge" id="count-outdated">0</span></button>
+            <button class="filter-btn abandoned" data-filter="abandoned">Abandoned <span class="count-badge" id="count-abandoned">0</span></button>
         </div>
         
         <div id="loading" class="loading">Loading...</div>
@@ -248,6 +282,47 @@
     
     <script>
         let allWorktrees = [];
+
+        function getAgeClass(daysSinceCommit) {
+            const days = Number(daysSinceCommit);
+
+            if (!Number.isFinite(days)) return '';
+            if (days < 1) return 'age-fresh';
+            if (days <= 7) return 'age-stale';
+            return 'age-old';
+        }
+
+        function getRowClass(worktree) {
+            if (worktree.abandoned || worktree.status === 'abandoned') return 'row-abandoned';
+            if (worktree.status === 'dirty') return 'row-dirty';
+            if (worktree.status === 'outdated') return 'row-outdated';
+            return 'row-clean';
+        }
+
+        function matchesFilter(worktree, filter) {
+            if (filter === 'all') return true;
+            if (filter === 'abandoned') return worktree.abandoned || worktree.status === 'abandoned';
+            return worktree.status === filter;
+        }
+
+        function updateFilterCounts() {
+            const filters = ['all', 'clean', 'dirty', 'outdated', 'abandoned'];
+
+            filters.forEach(filter => {
+                const count = filter === 'all'
+                    ? allWorktrees.length
+                    : allWorktrees.filter(wt => matchesFilter(wt, filter)).length;
+                const countElement = document.getElementById(`count-${filter}`);
+                if (countElement) countElement.textContent = count;
+            });
+        }
+
+        function applyFilter(filter) {
+            const filteredWorktrees = filter === 'all'
+                ? allWorktrees
+                : allWorktrees.filter(wt => matchesFilter(wt, filter));
+            renderTable(filteredWorktrees);
+        }
         
         async function loadData() {
             try {
@@ -256,6 +331,7 @@
                 const data = await response.json();
                 allWorktrees = data.worktrees;
                 updateSummary(data.summary);
+                updateFilterCounts();
                 renderTable(allWorktrees);
                 document.getElementById('updated').textContent = new Date(data.generated_at).toLocaleString();
                 document.getElementById('loading').style.display = 'none';
@@ -279,12 +355,12 @@
         function renderTable(worktrees) {
             const tbody = document.getElementById('tbody');
             tbody.innerHTML = worktrees.map(wt => `
-                <tr class="${wt.abandoned ? 'abandoned' : ''}">
+                <tr class="worktree-row ${getRowClass(wt)} ${wt.abandoned ? 'abandoned' : ''}">
                     <td class="name ${wt.abandoned ? 'abandoned' : ''}">${wt.name}</td>
                     <td class="branch">${wt.branch}</td>
                     <td><span class="status ${wt.status}">${wt.status}</span></td>
                     <td class="hide-mobile">${wt.last_commit || '-'}</td>
-                    <td class="hide-mobile">${wt.days_since_commit}</td>
+                    <td class="hide-mobile days ${getAgeClass(wt.days_since_commit)}">${wt.days_since_commit}</td>
                     <td class="hide-mobile commit">${wt.commit}</td>
                 </tr>
             `).join('');
@@ -296,11 +372,7 @@
                 document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 const filter = btn.dataset.filter;
-                if (filter === 'all') {
-                    renderTable(allWorktrees);
-                } else {
-                    renderTable(allWorktrees.filter(wt => wt.status === filter || (filter === 'abandoned' && wt.abandoned)));
-                }
+                applyFilter(filter);
             });
         });
         
