@@ -120,3 +120,11 @@ def watch(interval):
 
 if __name__ == "__main__":
     cli()
+
+
+@cli.command()
+@click.option("--refresh", default=0, help="Auto-refresh interval in seconds (0=disabled)")
+def tui(refresh):
+    """Launch the interactive TUI"""
+    from .rich_tui import run_tui
+    run_tui(refresh_seconds=refresh)
