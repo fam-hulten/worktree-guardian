@@ -128,3 +128,61 @@ def tui(refresh):
     """Launch the interactive TUI"""
     from .rich_tui import run_tui
     run_tui(refresh_seconds=refresh)
+
+
+@cli.command()
+@click.option("--days", default=3, help="Alert threshold in days")
+@click.option("--channel", default=None, help="Discord channel ID")
+def discord_alert(days, channel):
+    """Send stale worktrees to Discord"""
+    from .git_ops import scan_all_projects
+    
+    worktrees = scan_all_projects()
+    stale = [w for w in worktrees if w.stale == "red" or w.activity_days() > days]
+    
+    if not stale:
+        click.echo("✅ No stale worktrees - all good!")
+        return
+    
+    # Format message
+    lines = [f"🚨 **{len(stale)} stale worktrees**\n"]
+    for wt in stale:
+        issue = f"#{wt.issue_nr}" if wt.issue_nr else ""
+        lines.append(f"• `{wt.name}` {issue}")
+        lines.append(f"  {wt.activity_days()} days inactive")
+    
+    message = "\n".join(lines)
+    
+    if channel:
+        # Send to Discord via message tool
+        import subprocess
+        cmd = ['python3', '-c', f'''
+import sys
+sys.path.insert(0, ".")
+from wtree_guardian.discord_notify import send_discord
+send_discord({channel}, """{message}""")
+''']
+        subprocess.run(cmd, cwd="~/projects/worktree-guardian-tui")
+    else:
+        click.echo(message)
+
+
+@cli.command()
+@click.option("--days", default=3, help="Days threshold")
+def cleanup(days):
+    """Show commands to cleanup stale worktrees"""
+    from .git_ops import scan_all_projects
+    
+    worktrees = scan_all_projects()
+    stale = [w for w in worktrees if w.activity_days() > days]
+    
+    if not stale:
+        click.echo("✅ No stale worktrees to clean up")
+        return
+    
+    click.echo(f"\n🧹 Cleanup commands for {len(stale)} stale worktrees:\n")
+    for wt in stale:
+        click.echo(f"# {wt.name} ({wt.activity_days()}d)")
+        click.echo(f"cd ~/projects && rm -rf {wt.path}")
+        click.echo(f"cd ~/projects/{wt.repo} && git worktree remove {wt.path}")
+        click.echo()
