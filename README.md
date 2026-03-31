@@ -30,6 +30,39 @@ python3 worktree_guardian_v2.py --alert
 0 9 * * * cd ~/projects/worktree-guardian && ./check_abandoned.sh
 ```
 
+## Cleanup Bot Usage
+
+```bash
+# Scan for abandoned/merged worktrees (dry-run, safe)
+python3 cleanup_bot.py
+
+# Scan with custom days threshold
+python3 cleanup_bot.py --days 45
+
+# Actually remove candidates
+python3 cleanup_bot.py --apply
+
+# Force remove (even with uncommitted changes)
+python3 cleanup_bot.py --apply --force
+```
+
+### Discord Reporter
+
+Posts cleanup report to Discord webhook:
+
+```bash
+DISCORD_WEBHOOK=https://discord.com/api/webhooks/... python3 discord_reporter.py
+```
+
+Without webhook URL, prints summary to stdout.
+
+### Cron Job
+
+Runs weekly on Robert's machine (Sunday 18:00):
+```bash
+cd ~/projects/worktree-guardian && python3 cleanup_bot.py && python3 discord_reporter.py
+```
+
 ## Staleness Rules
 
 | Status | Meaning |
